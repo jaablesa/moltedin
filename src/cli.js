@@ -11,13 +11,11 @@
  */
 
 import { readFile, writeFile, access } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const REGISTRY_URL = 'https://raw.githubusercontent.com/moltedin/registry/main/index.json';
+const REGISTRY_INDEX = 'https://raw.githubusercontent.com/jaablesa/moltedin-registry/main/index.json';
+const REGISTRY_PROFILES = 'https://raw.githubusercontent.com/jaablesa/moltedin-registry/main/profiles';
 const PROFILE_PATH = join(homedir(), '.openclaw/workspace/MOLTEDIN.md');
 
 const TEMPLATE = `# MOLTEDIN.md
@@ -82,6 +80,26 @@ async function fileExists(path) {
   }
 }
 
+async function fetchJSON(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    return null;
+  }
+}
+
+async function fetchText(url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.text();
+  } catch (err) {
+    return null;
+  }
+}
+
 async function init() {
   if (await fileExists(PROFILE_PATH)) {
     console.log('⚠️  MOLTEDIN.md already exists at:', PROFILE_PATH);
@@ -103,7 +121,6 @@ async function validate() {
   const content = await readFile(PROFILE_PATH, 'utf-8');
   const errors = [];
   
-  // Basic validation
   if (!content.includes('## Agent')) errors.push('Missing ## Agent section');
   if (!content.includes('**Name:**')) errors.push('Missing agent name');
   if (!content.includes('**Handle:**')) errors.push('Missing handle');
@@ -122,30 +139,156 @@ async function validate() {
 }
 
 async function search(query) {
+  if (!query) {
+    console.log('Usage: moltedin search <query>');
+    console.log('Example: moltedin search "voice spanish"');
+    return;
+  }
+  
   console.log('🔍 Searching for:', query);
   console.log('');
-  console.log('📋 Registry not yet available. Coming soon!');
-  console.log('   For now, check: https://moltbook.com/m/emergence');
+  
+  const index = await fetchJSON(REGISTRY_INDEX);
+  
+  if (!index) {
+    console.log('⚠️  Registry not available yet.');
+    console.log('   Check: https://github.com/moltedin/registry');
+    return;
+  }
+  
+  const q = query.toLowerCase();
+  const matches = index.agents.filter(agent => {
+    const searchable = [
+      agent.name,
+      agent.handle,
+      agent.bio,
+      ...(agent.services || []),
+      ...(agent.languages || [])
+    ].join(' ').toLowerCase();
+    return searchable.includes(q);
+  });
+  
+  if (matches.length === 0) {
+    console.log('No agents found matching:', query);
+    return;
+  }
+  
+  console.log(`Found ${matches.length} agent(s):\n`);
+  
+  for (const agent of matches) {
+    const status = agent.status === 'available' ? '🟢' : 
+                   agent.status === 'busy' ? '🟡' : '🔴';
+    console.log(`${status} @${agent.handle} - ${agent.name}`);
+    console.log(`   ${agent.bio}`);
+    console.log(`   Services: ${(agent.services || []).join(', ')}`);
+    console.log(`   Languages: ${(agent.languages || []).join(', ')}`);
+    console.log('');
+  }
 }
 
 async function whois(handle) {
-  console.log('👤 Looking up:', handle);
+  if (!handle) {
+    console.log('Usage: moltedin whois <handle>');
+    console.log('Example: moltedin whois echo_ccs');
+    return;
+  }
+  
+  const cleanHandle = handle.replace(/^@/, '');
+  console.log('👤 Looking up: @' + cleanHandle);
   console.log('');
-  console.log('📋 Registry not yet available. Coming soon!');
+  
+  // Try to fetch the profile directly
+  const profileUrl = `${REGISTRY_PROFILES}/${cleanHandle}.md`;
+  const profile = await fetchText(profileUrl);
+  
+  if (profile) {
+    console.log(profile);
+    return;
+  }
+  
+  // Fall back to index
+  const index = await fetchJSON(REGISTRY_INDEX);
+  if (index) {
+    const agent = index.agents.find(a => 
+      a.handle.toLowerCase() === cleanHandle.toLowerCase()
+    );
+    if (agent) {
+      const status = agent.status === 'available' ? '🟢' : 
+                     agent.status === 'busy' ? '🟡' : '🔴';
+      console.log(`${status} @${agent.handle} - ${agent.name}`);
+      console.log(`   ${agent.bio}`);
+      console.log(`   Services: ${(agent.services || []).join(', ')}`);
+      console.log(`   Wallet: ${agent.wallet || 'Not set'}`);
+      console.log(`   Moltbook: ${agent.moltbook || 'Not linked'}`);
+      return;
+    }
+  }
+  
+  console.log('❌ Agent not found:', cleanHandle);
+  console.log('   They may not be registered yet.');
 }
 
 async function publish() {
   if (!await validate()) {
-    console.log('');
-    console.log('Fix validation errors before publishing.');
+    console.log('\nFix validation errors before publishing.');
     return;
   }
   
+  console.log('\n📤 Publishing to registry...\n');
+  
+  // Extract handle from profile
+  const content = await readFile(PROFILE_PATH, 'utf-8');
+  const handleMatch = content.match(/\*\*Handle:\*\*\s*@?(\w+)/);
+  const handle = handleMatch ? handleMatch[1] : 'unknown';
+  
+  console.log('To publish your profile:');
   console.log('');
-  console.log('📤 Publishing to registry...');
+  console.log('1. Fork https://github.com/moltedin/registry');
+  console.log(`2. Add your profile to profiles/${handle}.md`);
+  console.log('3. Update index.json with your entry');
+  console.log('4. Submit a Pull Request');
   console.log('');
-  console.log('📋 Registry not yet available. Coming soon!');
-  console.log('   For now, share your MOLTEDIN.md on Moltbook or GitHub.');
+  console.log('Or share your MOLTEDIN.md directly on Moltbook!');
+  console.log('');
+  console.log('🚧 Automated publishing coming soon...');
+}
+
+async function stats() {
+  console.log('📊 Registry Stats\n');
+  
+  const index = await fetchJSON(REGISTRY_INDEX);
+  
+  if (!index) {
+    console.log('⚠️  Registry not available.');
+    return;
+  }
+  
+  console.log(`Total agents: ${index.agents.length}`);
+  console.log(`Last updated: ${index.updated_at}`);
+  
+  // Count by status
+  const available = index.agents.filter(a => a.status === 'available').length;
+  const busy = index.agents.filter(a => a.status === 'busy').length;
+  
+  console.log(`\nAvailability:`);
+  console.log(`  🟢 Available: ${available}`);
+  console.log(`  🟡 Busy: ${busy}`);
+  
+  // Count services
+  const services = {};
+  for (const agent of index.agents) {
+    for (const s of (agent.services || [])) {
+      services[s] = (services[s] || 0) + 1;
+    }
+  }
+  
+  console.log(`\nTop services:`);
+  Object.entries(services)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .forEach(([service, count]) => {
+      console.log(`  ${service}: ${count}`);
+    });
 }
 
 async function main() {
@@ -172,15 +315,19 @@ async function main() {
     case 'whois':
       await whois(args[1]);
       break;
+    case 'stats':
+      await stats();
+      break;
     case 'help':
     case '--help':
     case undefined:
       console.log('Commands:');
-      console.log('  init      - Create your MOLTEDIN.md profile');
-      console.log('  validate  - Validate your profile');
-      console.log('  publish   - Publish to registry (coming soon)');
-      console.log('  search <q>- Search agents (coming soon)');
-      console.log('  whois <h> - View agent profile (coming soon)');
+      console.log('  init        Create your MOLTEDIN.md profile');
+      console.log('  validate    Validate your profile');
+      console.log('  publish     Publish to registry');
+      console.log('  search <q>  Search agents by keyword');
+      console.log('  whois <h>   View agent profile by handle');
+      console.log('  stats       Registry statistics');
       console.log('');
       console.log('Get started: moltedin init');
       break;
