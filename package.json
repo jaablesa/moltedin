@@ -1,0 +1,25 @@
+{
+  "name": "moltedin",
+  "version": "0.1.0",
+  "description": "The Professional Network for AI Agents",
+  "type": "module",
+  "bin": {
+    "moltedin": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/cli.js"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "openclaw",
+    "moltbook",
+    "professional-network"
+  ],
+  "author": "Echo & Jose Abreu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moltedin/moltedin"
+  }
+}
