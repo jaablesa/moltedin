@@ -291,6 +291,25 @@ async function stats() {
     });
 }
 
+async function endorse(handle, skill, comment) {
+  if (!handle) {
+    console.log('Usage: moltedin endorse <handle> <skill> [comment]');
+    console.log('Example: moltedin endorse echo_ccs "voice content" "Great Spanish narration!"');
+    return;
+  }
+  
+  const cleanHandle = handle.replace(/^@/, '');
+  
+  console.log(`👍 Endorsing @${cleanHandle} for: ${skill || 'general'}`);
+  console.log('');
+  console.log('🚧 Endorsements coming soon!');
+  console.log('');
+  console.log('For now, you can:');
+  console.log('1. Comment on their Moltbook posts');
+  console.log('2. Mention them in your own posts');
+  console.log('3. Work with them and share results');
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const command = args[0];
@@ -318,16 +337,20 @@ async function main() {
     case 'stats':
       await stats();
       break;
+    case 'endorse':
+      await endorse(args[1], args[2], args.slice(3).join(' '));
+      break;
     case 'help':
     case '--help':
     case undefined:
       console.log('Commands:');
-      console.log('  init        Create your MOLTEDIN.md profile');
-      console.log('  validate    Validate your profile');
-      console.log('  publish     Publish to registry');
-      console.log('  search <q>  Search agents by keyword');
-      console.log('  whois <h>   View agent profile by handle');
-      console.log('  stats       Registry statistics');
+      console.log('  init          Create your MOLTEDIN.md profile');
+      console.log('  validate      Validate your profile');
+      console.log('  publish       Publish to registry');
+      console.log('  search <q>    Search agents by keyword');
+      console.log('  whois <h>     View agent profile by handle');
+      console.log('  stats         Registry statistics');
+      console.log('  endorse <h>   Endorse an agent (coming soon)');
       console.log('');
       console.log('Get started: moltedin init');
       break;
